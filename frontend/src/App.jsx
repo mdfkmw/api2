@@ -27,6 +27,30 @@ axios.defaults.baseURL = API_URL;
 axios.defaults.withCredentials = true;
 
 
+function getCookie(name) {
+  const v = document.cookie.split('; ').find(x => x.startsWith(name + '='));
+  return v ? decodeURIComponent(v.split('=').slice(1).join('=')) : null;
+}
+
+// Trimite automat CSRF token pe cererile care modifică date
+axios.interceptors.request.use((config) => {
+  const method = (config.method || 'get').toLowerCase();
+  const needsCsrf = ['post', 'put', 'patch', 'delete'].includes(method);
+
+  if (needsCsrf) {
+    const token = getCookie('csrf_token');
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers['X-CSRF-Token'] = token;
+    }
+  }
+
+  return config;
+});
+
+
+
+
 function App() {
 
 

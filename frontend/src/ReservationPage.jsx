@@ -1979,8 +1979,7 @@ export default function ReservationPage({ userRole, user }) {
 
     (async () => {
       try {
-        // marchează că încărcăm stațiile (opțional, doar pentru debug)
-        console.log("🔄 Încarc stațiile pentru ruta", selectedRoute.id);
+
 
         const res = await fetch(`/api/routes/${selectedRoute.id}/stations?${params.toString()}`);
         if (!res.ok) {
