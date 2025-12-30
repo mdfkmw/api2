@@ -15,38 +15,63 @@ function signRefreshToken(payload) {
 
 function setAuthCookies(res, accessToken, refreshToken) {
   // În DEV pe localhost trebuie Secure = false, altfel browserul nu salvează cookie-ul pe HTTP.
-  const secure = false; // pune true doar în producție (HTTPS)
+  const isProd = process.env.NODE_ENV === 'production';
+  const secure = isProd;                 // true în producție (HTTPS), false în dev (HTTP)
+  const sameSite = isProd ? 'strict' : 'lax';
+
   res.cookie(ACCESS_COOKIE, accessToken, {
     httpOnly: true,
     secure,
-    sameSite: 'lax',
+    sameSite,
     path: '/',
     maxAge: ACCESS_TTL_SEC * 1000
   });
+
   res.cookie(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,
     secure,
-    sameSite: 'lax',
+    sameSite,
     path: '/',
     maxAge: REFRESH_TTL_SEC * 1000
   });
 }
+
 function clearAuthCookies(res) {
-  res.clearCookie(ACCESS_COOKIE, { path: '/' });
-  res.clearCookie(REFRESH_COOKIE, { path: '/' });
+  const isProd = process.env.NODE_ENV === 'production';
+  const secure = isProd;
+  const sameSite = isProd ? 'strict' : 'lax';
+
+  res.clearCookie(ACCESS_COOKIE, { path: '/', secure, sameSite });
+  res.clearCookie(REFRESH_COOKIE, { path: '/', secure, sameSite });
 }
 
+
+
 function verifyAccessToken(req, _res, next) {
-  const token = req.cookies?.[ACCESS_COOKIE];
+  // 1) încercăm din cookie (web)
+  const cookieToken = req.cookies?.[ACCESS_COOKIE];
+
+  // 2) încercăm din header Authorization: Bearer <token> (android / api clients)
+  const authHeader = req.headers?.authorization || '';
+  let bearerToken = null;
+  if (typeof authHeader === 'string') {
+    const m = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (m) bearerToken = m[1];
+  }
+
+  const token = cookieToken || bearerToken;
   if (!token) return next();
+
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload; // { id, role, operator_id, name, email }
   } catch (_) {
     // token expirat/invalid — ignorăm, req.user rămâne neautentificat
   }
+
   next();
 }
+
 
 function requireAuth(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'auth required' });

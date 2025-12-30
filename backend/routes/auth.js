@@ -17,16 +17,60 @@ function hash(str) {
   return crypto.createHash('sha256').update(str).digest('hex');
 }
 
+// =====================================================
+// SAFE AUTH LOGGING (DEV detaliat, PROD fără date personale)
+// =====================================================
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+function logAuth(message, meta) {
+  // În DEV: log complet (te ajută la debug)
+  if (!IS_PROD) {
+    if (meta !== undefined) return console.log(`[AUTH] ${message}`, meta);
+    return console.log(`[AUTH] ${message}`);
+  }
+
+  // În PROD: NU logăm ident/email/telefon/username etc.
+  // Păstrăm doar info tehnic minim (id/role/status/reason).
+  const safe = {};
+  if (meta && typeof meta === 'object') {
+    if (meta.id !== undefined) safe.id = meta.id;
+    if (meta.role !== undefined) safe.role = meta.role;
+    if (meta.status !== undefined) safe.status = meta.status;
+    if (meta.reason !== undefined) safe.reason = meta.reason;
+  }
+
+  if (Object.keys(safe).length) return console.log(`[AUTH] ${message}`, safe);
+  return console.log(`[AUTH] ${message}`);
+}
+
+
+
+const { makeRateLimiter } = require('../middleware/rateLimit');
+const loginLimiter = makeRateLimiter({
+  name: 'auth_login',
+  windowMs: process.env.RATE_LIMIT_LOGIN_WINDOW_MS,
+  max: process.env.RATE_LIMIT_LOGIN_MAX,
+});
+const refreshLimiter = makeRateLimiter({
+  name: 'auth_refresh',
+  windowMs: process.env.RATE_LIMIT_REFRESH_WINDOW_MS,
+  max: process.env.RATE_LIMIT_REFRESH_MAX,
+});
+
+
+
+
 // POST /api/auth/login  { email | phone | username | id | identifier, password }
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, phone, username, id, identifier, password } = req.body || {};
   const raw = (email ?? phone ?? username ?? id ?? identifier);
   if (!raw || !password) {
-    console.log('[AUTH] 400 lipsă ident/parolă', { raw: !!raw, hasPassword: !!password });
+    logAuth('400 lipsă ident/parolă', { status: 400, reason: 'missing_fields', raw: !!raw, hasPassword: !!password });
     return res.status(400).json({ error: 'email/telefon sau username + parolă necesare' });
   }
   const ident = String(raw).trim();
-  console.log('[AUTH] încerc login pentru ident=', ident);
+  logAuth('login attempt', { reason: 'attempt' });
+
 
   // Caută atât pe email cât și pe telefon (ident introdus într-un singur câmp)
   const rows = await q(
@@ -38,11 +82,13 @@ router.post('/login', async (req, res) => {
   );
   const emp = rows && rows[0] ? rows[0] : null;
   if (!emp) {
-    console.log('[AUTH] 401 user negăsit pentru ident=', ident);
+    logAuth('401 user negăsit', { status: 401, reason: 'not_found' });
+
     return res.status(401).json({ error: 'cont invalid sau inactiv' });
   }
   if (!emp.active) {
-    console.log('[AUTH] 401 user inactiv id=', emp.id);
+    logAuth('401 user inactiv', { status: 401, id: emp.id, reason: 'inactive' });
+
     return res.status(401).json({ error: 'cont invalid sau inactiv' });
   }
 
@@ -56,7 +102,8 @@ router.post('/login', async (req, res) => {
     ok = false;
   }
   if (!ok) {
-    console.log('[AUTH] 401 parolă greșită pentru id=', emp.id);
+    logAuth('401 parolă greșită', { status: 401, id: emp.id, reason: 'bad_password' });
+
     return res.status(401).json({ error: 'credențiale invalide' });
   }
 
@@ -78,12 +125,13 @@ router.post('/login', async (req, res) => {
   );
 
   setAuthCookies(res, access, refresh);
-  console.log('[AUTH] 200 login OK id=', emp.id, 'role=', emp.role);
+  logAuth('200 login OK', { status: 200, id: emp.id, role: emp.role, reason: 'ok' });
+
   return res.json({ ok: true, user: payload });
 });
 
 // POST /api/auth/refresh
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', refreshLimiter, async (req, res) => {
   const refresh = req.cookies?.refresh_token;
   if (!refresh) return res.status(401).json({ error: 'no refresh' });
 
@@ -106,11 +154,13 @@ router.post('/refresh', async (req, res) => {
   const empRows = await q('SELECT id, name, email, role, operator_id, active FROM employees WHERE id=? LIMIT 1', [sess.employee_id]);
   const emp = empRows[0];
   if (!emp) {
-    console.log('[AUTH] nu a găsit employee pentru', ident);
+    logAuth('refresh: employee negăsit', { status: 401, id: sess.employee_id, reason: 'not_found' });
+
     return res.status(401).json({ error: 'cont invalid sau inactiv' });
   }
   if (!emp.active) {
-    console.log('[AUTH] employee inactiv id=', emp.id);
+    logAuth('refresh: employee inactiv', { status: 401, id: emp.id, reason: 'inactive' });
+
     return res.status(401).json({ error: 'cont invalid sau inactiv' });
   }
 

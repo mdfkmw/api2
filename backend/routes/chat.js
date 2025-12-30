@@ -109,11 +109,38 @@ router.post('/upload', requireAuth, upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Lipsește fișierul' });
   }
-  // URL public servit din /uploads (configurat în server.js)
-  const base = `${req.protocol}://${req.get('host')}`;
-const publicUrl = `${base}/uploads/${req.file.filename}`;
-  res.status(201).json({ url: publicUrl });
+const base = `${req.protocol}://${req.get('host')}`;
+const protectedUrl = `${base}/api/chat/file/${req.file.filename}`;
+res.status(201).json({ url: protectedUrl });
+
 });
+
+// Servește fișierele încărcate DOAR cu autentificare + rol permis
+router.get('/file/:filename', requireAuth, (req, res) => {
+  const role = req.user?.role;
+  if (!ALLOWED_ROLES.has(role)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  const filename = String(req.params.filename || '');
+
+  // blocăm orice încercare de path traversal
+  if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return res.status(400).json({ error: 'invalid_filename' });
+  }
+
+  const filePath = path.join(UPLOADS_DIR, filename);
+
+  // dacă fișierul nu există
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+
+  return res.sendFile(filePath);
+});
+
+
+
 
 router.get('/messages', async (req, res) => {
   const afterId = req.query.afterId ? Number(req.query.afterId) : null;

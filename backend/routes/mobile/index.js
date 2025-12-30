@@ -1,6 +1,12 @@
 const express = require('express');
-
+const { requireAuth, requireRole } = require('../../middleware/auth');
 const router = express.Router();
+router.use(requireAuth);
+router.use(requireRole('driver'));
+
+
+
+
 
 router.use('/operators', require('./OperatorsApp'));
 router.use('/employees', require('./EmployeesApp'));

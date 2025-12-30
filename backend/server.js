@@ -5,6 +5,7 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+
 const { validateMailerConfig } = require('./utils/mailer');
 
 const mailerStatus = validateMailerConfig();
@@ -17,6 +18,8 @@ if (!mailerStatus.ok) {
 }
 
 
+
+
 // Importă frameworkul Express – esențial pentru crearea aplicației backend
 const express = require('express');
 
@@ -27,6 +30,9 @@ const cookieParser = require('cookie-parser');
 
 // Creează instanța aplicației Express
 const app = express();
+app.disable('x-powered-by');
+
+
 // ✅ HEARTBEAT global seats (fallback dacă serverul pornește și nimeni nu a cerut seats)
 global.__lastSeatActivityAt = Date.now();
 
@@ -37,6 +43,9 @@ const pool = require('./db');
 // Auth/RBAC middleware helpers
 const { verifyAccessToken, requireAuth, requireRole } = require('./middleware/auth');
 const { attachPublicUser } = require('./middleware/publicAuth');
+
+const { csrfCookie, csrfProtect } = require('./middleware/csrf');
+
 
 // Încarcă fișierele pentru rutele individuale
 const routesApi = require('./routes/routes');
@@ -82,14 +91,13 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:5173',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'http://diagrama.pris-com.ro',
-  'http://www.diagrama.pris-com.ro',
+
   'https://diagrama.pris-com.ro',
   'https://www.diagrama.pris-com.ro',
+
   'https://pris-com.ro',
   'https://www.pris-com.ro',
-  'http://pris-com.ro',
-  'http://www.pris-com.ro',
+
   'https://api.pris-com.ro',
   'https://www.api.pris-com.ro',
 ];
@@ -105,6 +113,19 @@ function isAllowedOrigin(origin) {
   return LAN_REGEXES.some((regex) => regex.test(origin));
 }
 app.set('trust proxy', 1); // necesar pt cookie secure când e în spatele webserverului
+
+// Force HTTPS în producție (în spatele proxy-ului)
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    const proto = req.headers['x-forwarded-proto'];
+    if (proto && proto !== 'https') {
+      return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
+    }
+  }
+  next();
+});
+
+
 app.use(cors({
   credentials: true,
   origin(origin, cb) {
@@ -120,9 +141,40 @@ app.use(cors({
     'Cache-Control',
     'Pragma',
     'Expires',
+    'X-CSRF-Token',
   ],
+
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
+
+
+// ===============================
+// Security headers (prod + dev)
+// ===============================
+app.use((req, res, next) => {
+  // HSTS doar în producție și doar când requestul e pe HTTPS
+  // (în spatele proxy-ului, Express vede corect dacă ai app.set('trust proxy', 1) - ai deja)
+  if (process.env.NODE_ENV === 'production' && req.secure) {
+    // 6 luni + includeSubDomains (poți adăuga preload mai târziu când ești 100% sigur)
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+
+  // Protecții generale
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Anti-clickjacking (dacă NU ai nevoie să embedezi diagrama în iframe)
+  res.setHeader('X-Frame-Options', 'DENY');
+
+  // Dezactivează features sensibile
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)'
+  );
+
+  next();
+});
+
 
 
 // ✅ Middleware Express pentru a interpreta automat datele JSON din body-ul requestului
@@ -134,6 +186,10 @@ app.use(cookieParser());
 app.use(verifyAccessToken);
 // Atașează utilizatorul public (site) în req.publicUser dacă există cookie dedicat
 app.use(attachPublicUser);
+
+
+
+
 
 // 🔎 LOG GLOBAL: vezi orice request intră în backend
 //app.use((req, res, next) => {
@@ -152,6 +208,12 @@ app.get('/api/auth/me', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/public/auth', publicAuthRoutes);
+
+// crsf cookie
+app.use(csrfCookie);
+app.use(csrfProtect);
+
+
 app.use('/api/invitations', invitationsRoutes);
 app.use('/api/seats', seatsRoutes);
 app.use('/api', require('./routes/agentJobs'));
@@ -285,7 +347,7 @@ app.use('/api/promo-codes', promoCodesRoutes);
 app.use('/api', require('./routes/audit'));
 app.use('/api/user', userPrefs);
 app.use('/api/chat', chatRoutes);
-app.use('/uploads', express.static(path.resolve(__dirname, 'uploads')));
+
 
 
 app.get('/', (req, res) => {

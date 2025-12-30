@@ -26,6 +26,16 @@ const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const APPLE_JWKS_URL = 'https://appleid.apple.com/auth/keys';
 const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 oră
 
+
+const { makeRateLimiter } = require('../middleware/rateLimit');
+const publicLoginLimiter = makeRateLimiter({
+  name: 'public_login',
+  windowMs: process.env.RATE_LIMIT_PUBLIC_LOGIN_WINDOW_MS,
+  max: process.env.RATE_LIMIT_PUBLIC_LOGIN_MAX,
+});
+
+
+
 const jwksCache = {
   google: { url: GOOGLE_JWKS_URL, fetchedAt: 0, pems: new Map() },
   apple: { url: APPLE_JWKS_URL, fetchedAt: 0, pems: new Map() },
@@ -946,7 +956,7 @@ const insert = await db.query(
   });
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', publicLoginLimiter, async (req, res) => {
   const { email, password, remember } = req.body || {};
   const normalizedEmail = normalizeEmail(email);
 
