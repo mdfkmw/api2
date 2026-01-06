@@ -2120,10 +2120,11 @@ export default function ReservationPage({ userRole, user }) {
           data.exit_at || '',
           data.category_id ?? '',
           data.discount_type_id ?? '',
+          pricePerSeat[id] ?? '',
         ].join('~');
       })
       .join('|');
-  }, [selectedSeats, passengersData]);
+  }, [selectedSeats, passengersData, pricePerSeat]);
 
   const promoTripKeyRef = useRef(promoTripKey);
   const promoPassengerKeyRef = useRef(promoPassengerKey);
