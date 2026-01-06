@@ -14,13 +14,6 @@ import SeatMap from './components/SeatMap';
 import SeatTimeline from './components/SeatTimeline';
 import PassengerForm from './components/PassengerForm';
 import { isPassengerValid } from './components/utils/validation';
-
-  const resetPromo = useCallback(() => {
-    setPromoApplied(null);
-    setPromoCode('');
-    setIsApplyingPromo(false);
-  }, []);
-
 import MoveToOtherTripPanel from './components/MoveToOtherTripPanel';
 import CalendarWrapper from './components/CalendarWrapper';
 import AddVehicleModal from './components/AddVehicleModal';
@@ -48,6 +41,11 @@ export default function ReservationPage({ userRole, user }) {
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(null); // { promo_code_id, code, discount_amount, combinable }
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+  const resetPromo = useCallback(() => {
+    setPromoApplied(null);
+    setPromoCode('');
+    setIsApplyingPromo(false);
+  }, []);
 
   const normalizedRole = typeof userRole === 'string' ? userRole.toLowerCase() : '';
   const bookingChannel = ['admin', 'operator_admin', 'agent'].includes(normalizedRole)
