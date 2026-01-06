@@ -1788,12 +1788,12 @@ export default function ReservationPage({ userRole, user }) {
 
 
 
-  const handleApplyPromo = async () => {
+  const handleApplyPromo = async (force = false) => {
     if (isApplyingPromo) return;
-    const baseTotal = getTotalToPay(); // total după reduceri de tip (elev/student)
+    const baseTotal = getTotalToPay(false); // total după reduceri de tip (elev/student)
     if (!promoCode || baseTotal <= 0) { setPromoApplied(null); return; }
     const normalizedCode = promoCode.trim().toUpperCase();
-    if (promoApplied?.code === normalizedCode) return;
+    if (!force && promoApplied?.code === normalizedCode) return;
     const body = {
       code: normalizedCode,
       route_id: selectedRoute?.id || null,
@@ -2072,7 +2072,7 @@ export default function ReservationPage({ userRole, user }) {
 
 
   // Calculează totalul de plată pentru pasagerii selectați (aplică reducerile)
-  const getTotalToPay = () => {
+  const getTotalToPay = (includePromo = true) => {
     let total = 0;
     selectedSeats.forEach(seat => {
       const price = pricePerSeat[seat.id];
@@ -2093,7 +2093,7 @@ export default function ReservationPage({ userRole, user }) {
     });
     // total final nu poate fi negativ
     let t = Number(Math.max(total, 0).toFixed(2));
-    if (promoApplied?.discount_amount) {
+    if (includePromo && promoApplied?.discount_amount) {
       t = Math.max(0, +(t - Number(promoApplied.discount_amount)).toFixed(2));
     }
     return t;
@@ -2129,22 +2129,45 @@ export default function ReservationPage({ userRole, user }) {
   const promoPassengerKeyRef = useRef(promoPassengerKey);
 
   useEffect(() => {
-    if (promoApplied && promoTripKeyRef.current && promoTripKeyRef.current !== promoTripKey) {
-      resetPromo();
+    if (!promoCode.trim()) {
+      promoTripKeyRef.current = promoTripKey;
+      return;
+    }
+    if (!selectedRoute?.id || !selectedScheduleId || !selectedHour) {
+      promoTripKeyRef.current = promoTripKey;
+      return;
+    }
+    if (promoTripKeyRef.current && promoTripKeyRef.current !== promoTripKey) {
+      promoTripKeyRef.current = promoTripKey;
+      const timer = setTimeout(() => {
+        handleApplyPromo(true);
+      }, 200);
+      return () => clearTimeout(timer);
     }
     promoTripKeyRef.current = promoTripKey;
-  }, [promoApplied, promoTripKey, resetPromo]);
+  }, [handleApplyPromo, promoCode, promoTripKey, selectedHour, selectedRoute?.id, selectedScheduleId]);
 
   useEffect(() => {
+    if (!promoCode.trim()) {
+      promoPassengerKeyRef.current = promoPassengerKey;
+      return;
+    }
+    if (!selectedRoute?.id || !selectedScheduleId || !selectedHour) {
+      promoPassengerKeyRef.current = promoPassengerKey;
+      return;
+    }
     if (
-      promoApplied &&
       promoPassengerKeyRef.current &&
       promoPassengerKeyRef.current !== promoPassengerKey
     ) {
-      resetPromo();
+      promoPassengerKeyRef.current = promoPassengerKey;
+      const timer = setTimeout(() => {
+        handleApplyPromo(true);
+      }, 200);
+      return () => clearTimeout(timer);
     }
     promoPassengerKeyRef.current = promoPassengerKey;
-  }, [promoApplied, promoPassengerKey, resetPromo]);
+  }, [handleApplyPromo, promoCode, promoPassengerKey, selectedHour, selectedRoute?.id, selectedScheduleId]);
 
 
 
