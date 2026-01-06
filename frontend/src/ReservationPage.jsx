@@ -2126,11 +2126,16 @@ export default function ReservationPage({ userRole, user }) {
       .join('|');
   }, [selectedSeats, passengersData, pricePerSeat]);
 
+  const promoPricingReady = useMemo(() => {
+    if (!selectedSeats.length) return false;
+    return selectedSeats.every((seat) => typeof pricePerSeat[seat.id] === 'number');
+  }, [pricePerSeat, selectedSeats]);
+
   const promoTripKeyRef = useRef(promoTripKey);
   const promoPassengerKeyRef = useRef(promoPassengerKey);
 
   useEffect(() => {
-    if (!promoCode.trim()) {
+    if (!promoCode.trim() || !promoPricingReady) {
       promoTripKeyRef.current = promoTripKey;
       return;
     }
@@ -2146,10 +2151,18 @@ export default function ReservationPage({ userRole, user }) {
       return () => clearTimeout(timer);
     }
     promoTripKeyRef.current = promoTripKey;
-  }, [handleApplyPromo, promoCode, promoTripKey, selectedHour, selectedRoute?.id, selectedScheduleId]);
+  }, [
+    handleApplyPromo,
+    promoCode,
+    promoPricingReady,
+    promoTripKey,
+    selectedHour,
+    selectedRoute?.id,
+    selectedScheduleId,
+  ]);
 
   useEffect(() => {
-    if (!promoCode.trim()) {
+    if (!promoCode.trim() || !promoPricingReady) {
       promoPassengerKeyRef.current = promoPassengerKey;
       return;
     }
@@ -2168,7 +2181,15 @@ export default function ReservationPage({ userRole, user }) {
       return () => clearTimeout(timer);
     }
     promoPassengerKeyRef.current = promoPassengerKey;
-  }, [handleApplyPromo, promoCode, promoPassengerKey, selectedHour, selectedRoute?.id, selectedScheduleId]);
+  }, [
+    handleApplyPromo,
+    promoCode,
+    promoPricingReady,
+    promoPassengerKey,
+    selectedHour,
+    selectedRoute?.id,
+    selectedScheduleId,
+  ]);
 
 
 
