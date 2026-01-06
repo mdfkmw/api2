@@ -662,25 +662,25 @@ router.post('/', async (req, res) => {
       promoConn = await db.getConnection();
       await promoConn.beginTransaction();
 
-      const lockRes = await promoConn.query(
+      const [lockRows] = await promoConn.query(
         `SELECT id, code, max_total_uses, value_off
            FROM promo_codes
           WHERE id = ? AND UPPER(code) = UPPER(?) AND active = 1
           FOR UPDATE`,
         [promoPayload.promo_code_id || 0, promoPayload.code]
       );
-      const row = lockRes?.rows?.[0] || null;
+      const row = lockRows?.[0] || null;
       if (!row) {
         // cod inactiv/invalid → nu blocăm salvarea
         await promoConn.rollback();
         promoConn.release();
         promoConn = null;
       } else {
-        const usedRes = await promoConn.query(
+        const [usedRows] = await promoConn.query(
           `SELECT COUNT(*) AS c FROM promo_code_usages WHERE promo_code_id = ?`,
           [row.id]
         );
-        const usedCount = Number(usedRes?.rows?.[0]?.c || 0);
+        const usedCount = Number(usedRows?.[0]?.c || 0);
         if (row.max_total_uses && usedCount >= row.max_total_uses) {
           // limită atinsă
           await promoConn.rollback();

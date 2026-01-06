@@ -2327,7 +2327,7 @@ router.get('/ipay/return', async (req, res) => {
 
     const { rows: orderRows } = await execQuery(
       conn,
-      `SELECT id, trip_id, operator_id, payment_provider, total_amount, status, expires_at, board_station_id, exit_station_id, customer_phone, customer_email, customer_name FROM orders WHERE id = ? LIMIT 1`,
+      `SELECT id, trip_id, operator_id, payment_provider, total_amount, status, expires_at, board_station_id, exit_station_id, customer_phone, customer_email, customer_name, promo_code_id, promo_value_off FROM orders WHERE id = ? LIMIT 1`,
       [orderId],
     );
     if (!orderRows.length) {
@@ -2423,6 +2423,20 @@ router.get('/ipay/return', async (req, res) => {
     // Observatie: in schema existenta, people se identifica prin telefon. In public, cream people la momentul platii (nu la createOrder).
     let phoneAssigned = false;
     const reservationIds = [];
+    const promoCodeId = Number(order.promo_code_id);
+    let promoSnapshot = null;
+    if (Number.isFinite(promoCodeId) && promoCodeId > 0) {
+      const { rows: promoRows } = await execQuery(
+        conn,
+        `SELECT value_off FROM promo_codes WHERE id = ? LIMIT 1`,
+        [promoCodeId],
+      );
+      const rawSnapshot = Number(promoRows?.[0]?.value_off);
+      if (!Number.isFinite(rawSnapshot)) {
+        throw new Error('Promo snapshot invalid');
+      }
+      promoSnapshot = rawSnapshot;
+    }
 
     for (const it of items) {
       const travelerName = it.traveler_name || '';
@@ -2465,6 +2479,9 @@ router.get('/ipay/return', async (req, res) => {
 
       // promo (per item)
       if (it.promo_code_id && Number(it.promo_discount_amount) > 0) {
+        if (promoSnapshot === null) {
+          throw new Error('Promo snapshot missing');
+        }
         await execQuery(
           conn,
           `
@@ -2472,7 +2489,7 @@ router.get('/ipay/return', async (req, res) => {
             (reservation_id, promo_code_id, discount_amount, discount_snapshot)
           VALUES (?, ?, ?, ?)
           `,
-          [reservationId, Number(it.promo_code_id), Number(it.promo_discount_amount), null],
+          [reservationId, Number(it.promo_code_id), Number(it.promo_discount_amount), promoSnapshot],
         );
         await execQuery(
           conn,

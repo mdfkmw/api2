@@ -15,6 +15,12 @@ import SeatTimeline from './components/SeatTimeline';
 import PassengerForm from './components/PassengerForm';
 import { isPassengerValid } from './components/utils/validation';
 
+  const resetPromo = useCallback(() => {
+    setPromoApplied(null);
+    setPromoCode('');
+    setIsApplyingPromo(false);
+  }, []);
+
 import MoveToOtherTripPanel from './components/MoveToOtherTripPanel';
 import CalendarWrapper from './components/CalendarWrapper';
 import AddVehicleModal from './components/AddVehicleModal';
@@ -41,6 +47,7 @@ export default function ReservationPage({ userRole, user }) {
 
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(null); // { promo_code_id, code, discount_amount, combinable }
+  const [isApplyingPromo, setIsApplyingPromo] = useState(false);
 
   const normalizedRole = typeof userRole === 'string' ? userRole.toLowerCase() : '';
   const bookingChannel = ['admin', 'operator_admin', 'agent'].includes(normalizedRole)
@@ -1784,10 +1791,13 @@ export default function ReservationPage({ userRole, user }) {
 
 
   const handleApplyPromo = async () => {
+    if (isApplyingPromo) return;
     const baseTotal = getTotalToPay(); // total după reduceri de tip (elev/student)
     if (!promoCode || baseTotal <= 0) { setPromoApplied(null); return; }
+    const normalizedCode = promoCode.trim().toUpperCase();
+    if (promoApplied?.code === normalizedCode) return;
     const body = {
-      code: promoCode,
+      code: normalizedCode,
       route_id: selectedRoute?.id || null,
       route_schedule_id: selectedScheduleId,
       date: format(selectedDate, 'yyyy-MM-dd'),
@@ -1797,6 +1807,7 @@ export default function ReservationPage({ userRole, user }) {
       phone: (passengers?.[0]?.phone || '').trim() || null
     };
     try {
+      setIsApplyingPromo(true);
       const r = await fetch('/api/promo-codes/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1806,7 +1817,7 @@ export default function ReservationPage({ userRole, user }) {
       if (data.valid) {
         setPromoApplied({
           promo_code_id: data.promo_code_id,
-          code: promoCode.toUpperCase(),
+          code: normalizedCode,
           discount_amount: data.discount_amount,
           combinable: !!data.combinable
         });
@@ -1819,7 +1830,8 @@ export default function ReservationPage({ userRole, user }) {
     } catch (e) {
       setPromoApplied(null);
       showToast('Eroare la validare cod', 'error', 3000);
-
+    } finally {
+      setIsApplyingPromo(false);
     }
   };
 
@@ -2089,6 +2101,53 @@ export default function ReservationPage({ userRole, user }) {
     return t;
   };
 
+  const promoTripKey = useMemo(() => {
+    if (!selectedDate) return '';
+    return [
+      selectedRoute?.id ?? '',
+      selectedScheduleId ?? '',
+      selectedHour ?? '',
+      format(selectedDate, 'yyyy-MM-dd'),
+    ].join('|');
+  }, [selectedRoute?.id, selectedScheduleId, selectedHour, selectedDate]);
+
+  const promoPassengerKey = useMemo(() => {
+    const ids = selectedSeats.map((s) => s.id).slice().sort((a, b) => a - b);
+    return ids
+      .map((id) => {
+        const data = passengersData[id] || {};
+        return [
+          id,
+          data.board_at || '',
+          data.exit_at || '',
+          data.category_id ?? '',
+          data.discount_type_id ?? '',
+        ].join('~');
+      })
+      .join('|');
+  }, [selectedSeats, passengersData]);
+
+  const promoTripKeyRef = useRef(promoTripKey);
+  const promoPassengerKeyRef = useRef(promoPassengerKey);
+
+  useEffect(() => {
+    if (promoApplied && promoTripKeyRef.current && promoTripKeyRef.current !== promoTripKey) {
+      resetPromo();
+    }
+    promoTripKeyRef.current = promoTripKey;
+  }, [promoApplied, promoTripKey, resetPromo]);
+
+  useEffect(() => {
+    if (
+      promoApplied &&
+      promoPassengerKeyRef.current &&
+      promoPassengerKeyRef.current !== promoPassengerKey
+    ) {
+      resetPromo();
+    }
+    promoPassengerKeyRef.current = promoPassengerKey;
+  }, [promoApplied, promoPassengerKey, resetPromo]);
+
 
 
 
@@ -2128,6 +2187,7 @@ export default function ReservationPage({ userRole, user }) {
     setSelectedSeats([]);
     setPassengersData({});
     setPricePerSeat({});
+    resetPromo();
 
     // setăm noua rută (fără a porni încărcări)
     setSelectedRoute(route);
@@ -2156,7 +2216,7 @@ export default function ReservationPage({ userRole, user }) {
       setIntentHolds({});
       intentsRef.current = {};
       setPassengers([]);
-      setPromoApplied(null);
+      resetPromo();
       setSelectedTrip(null);
       setTripId(null);
       setSelectedPriceListId(null);
@@ -2199,7 +2259,7 @@ export default function ReservationPage({ userRole, user }) {
     setSelectedSchedule(resolved);
     //setSelectedDirection(resolved.direction || null);
     // direcția se ia din selectedSchedule.direction la calculul effectiveDirection
-  }, [releaseHeldSeats, selectedRoute]);
+  }, [releaseHeldSeats, resetPromo, selectedRoute]);
 
 
 
@@ -5491,16 +5551,25 @@ export default function ReservationPage({ userRole, user }) {
                             <input
                               className="w-40 border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                               value={promoCode}
-                              onChange={(e) => setPromoCode(e.target.value)}
+                              onChange={(e) => {
+                                setPromoCode(e.target.value);
+                                if (promoApplied) {
+                                  setPromoApplied(null);
+                                }
+                              }}
                               placeholder="FALL25"
                             />
                             <button
                               type="button"
                               onClick={handleApplyPromo}
-                              disabled={!promoCode.trim()}
+                              disabled={
+                                isApplyingPromo ||
+                                !promoCode.trim() ||
+                                promoApplied?.code === promoCode.trim().toUpperCase()
+                              }
                               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              Aplică
+                              {isApplyingPromo ? 'Aplic...' : 'Aplică'}
                             </button>
                           </div>
                           {promoApplied && (
@@ -5509,8 +5578,7 @@ export default function ReservationPage({ userRole, user }) {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setPromoApplied(null);
-                                  setPromoCode('');
+                                  resetPromo();
                                 }}
                                 className="text-[11px] font-normal text-green-600 underline-offset-2 hover:underline"
                               >
