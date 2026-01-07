@@ -4757,15 +4757,14 @@ export default function ReservationPage({ userRole, user }) {
       />
 
 
-      <div className="inline-block space-y-6">
-        <div className="flex flex-col md:inline-flex md:flex-row gap-6 items-start">
-          <div className="bg-white rounded shadow p-4 w-fit">
+      <div className="flex w-full max-w-[1600px] gap-6 items-start">
+        <div className="flex w-full max-w-md flex-col gap-6">
+          <div className="bg-white rounded shadow p-4 w-full">
             <label className="block font-semibold mb-2">Selectează data:</label>
             <CalendarWrapper selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
-
           </div>
 
-          <div className="bg-white rounded shadow p-4 space-y-4 w-fit">
+          <div className="bg-white rounded shadow p-4 space-y-4 w-full">
             <div className="flex justify-between items-center flex-wrap gap-4">
               {/* Butoane rapide */}
               <div className="flex gap-2">
@@ -4802,21 +4801,15 @@ export default function ReservationPage({ userRole, user }) {
             </div>
 
             <div>
-
-
               <RouteSelector
                 routes={routesList}
                 selectedRoute={selectedRoute}
                 onSelectRoute={handleSelectRoute}
               />
-
             </div>
-
-
 
             {selectedRoute && (
               <div>
-
                 <div className="flex flex-wrap gap-3 mb-6">
                   <HourSelector
                     selectedRoute={selectedRoute}
@@ -4841,11 +4834,8 @@ export default function ReservationPage({ userRole, user }) {
                         setToastMessage={setToastMessage}
                         setToastType={setToastType}
                         stops={routeStations.map(s => s.name)}
-
                       />
                     </div>
-
-
                   </div>
                 )}
 
@@ -4931,15 +4921,8 @@ export default function ReservationPage({ userRole, user }) {
                             setActiveTv(prev => (prev === id ? 'main' : prev));
                           }}
                         />
-
-
-
-
-
                       </div>
                     ))}
-
-
 
                     {/* Butonul “Adaugă maşină” rămâne la fel */}
                     <button
@@ -4991,28 +4974,19 @@ export default function ReservationPage({ userRole, user }) {
                     </button>
                   </div>
                 )}
-
-
-
-
-
               </div>
             )}
           </div>
-
-
-
-
-
         </div>
 
-        {selectedHour && (
+        <div className="flex-1 space-y-6">
+          {selectedHour && (
           isLoadingSeats ? (
-            <div style={{ padding: 40, textAlign: "center", fontSize: 22 }}>
+            <div className="rounded bg-white p-10 text-center text-xl shadow">
               Se încarcă harta locurilor...
             </div>
           ) : seats.length > 0 && (
-            <div className="bg-white rounded shadow p-4 flex gap-6 items-start w-fit mx-auto relative">
+            <div className="bg-white rounded shadow p-4 flex gap-6 items-start w-full relative">
               {/* Harta locurilor */}
               <div>
                 <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -5887,6 +5861,8 @@ export default function ReservationPage({ userRole, user }) {
 
             </div>
           )
+          )}
+        </div>
         )}
 
       </div>
