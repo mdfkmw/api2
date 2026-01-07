@@ -778,7 +778,6 @@ export default function SeatModal({ isOpen, onClose, onConfirm, trip, travelDate
           <div className="px-6 py-4 border-b border-white/10 flex flex-wrap items-center gap-4 text-sm">
             <Legend color="bg-transparent ring-1 ring-white/30" label="Disponibil" />
             <Legend color="bg-brand text-white" label="Selectat" />
-            <Legend color="bg-amber-500/80 text-black" label="În curs de rezervare" />
             <Legend color="bg-white/15" label="Ocupat" />
           </div>
 
@@ -837,7 +836,7 @@ export default function SeatModal({ isOpen, onClose, onConfirm, trip, travelDate
                       const isDriver = seat.seat_type === 'driver' || seat.seat_type === 'guide'
                       const isPartial = seat.status === 'partial'
                       const isBlocked = seat.status === 'blocked' || seat.blocked_online === true
-                      const baseUnavailable = seat.status === 'full' || isBlocked || (!isPartial && !seat.is_available && !heldByMe)
+                      const baseUnavailable = seat.status === 'full' || isBlocked || isPartial || (!seat.is_available && !heldByMe)
                       const isUnavailable = isDriver || heldByOther || baseUnavailable
 
                       const baseClasses = [
@@ -850,13 +849,11 @@ export default function SeatModal({ isOpen, onClose, onConfirm, trip, travelDate
                       if (isDriver) {
                         stateClasses = 'bg-white/10 text-white/60 cursor-not-allowed'
                       } else if (heldByOther) {
-                        stateClasses = 'bg-amber-500/80 text-black cursor-not-allowed'
+                        stateClasses = 'bg-white/15 text-white/40 cursor-not-allowed'
                       } else if (isSelected || heldByMe) {
                         stateClasses = 'bg-brand text-white shadow-[0_0_14px_rgba(47,168,79,0.7)] scale-105'
                       } else if (baseUnavailable) {
                         stateClasses = 'bg-white/15 text-white/40 cursor-not-allowed'
-                      } else if (seat.status === 'partial') {
-                        stateClasses = 'bg-amber-400/80 text-black hover:bg-amber-400'
                       } else {
                         stateClasses = 'bg-white/10 text-white hover:bg-white/20 hover:scale-105'
                       }
@@ -871,7 +868,7 @@ export default function SeatModal({ isOpen, onClose, onConfirm, trip, travelDate
                             isDriver
                               ? 'Loc de serviciu'
                               : heldByOther
-                              ? 'Alt client rezervă acest loc'
+                              ? 'Loc ocupat'
                               : baseUnavailable
                               ? 'Loc ocupat'
                               : undefined
